@@ -5,7 +5,7 @@ on:
     branches: [main]
   workflow_dispatch:
   schedule:
-    # Daily check for Ship of Harkinian, NUSspli and Warthog Wii U tagged releases.
+    # Daily check for SoH, NUSspli, Warthog and the Half-Life Wii U port.
     - cron: '12 6 * * *'
 
 permissions:
@@ -45,14 +45,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 scripts/build_warthog.py --out public
-      - name: Check all three packages are in the published repository
+      - name: Append official Half-Life Wii U release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/build_halflife.py --out public
+      - name: Check all four packages are in the published repository
         run: |
           python3 - <<'PY'
           import json
           from pathlib import Path
           repo = json.loads(Path('public/repo.json').read_text())
           names = [p['name'] for p in repo['packages']]
-          assert set(names) == {'soh_wiiu_community', 'nusspli', 'chupathingy_wiiu'}, names
+          assert set(names) == {'soh_wiiu_community', 'nusspli', 'chupathingy_wiiu', 'halflife_wiiu'}, names
           for name in names:
               assert (Path('public/zips') / f'{name}.zip').is_file(), name
               assert (Path('public/packages') / name / 'icon.png').is_file(), name
