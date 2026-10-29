@@ -28,7 +28,7 @@ USER_AGENT = "wiiu-soh-custom-store/1.0"
 # Update this compatibility family after manually testing a new base release.
 DEFAULT_COMPAT = "9.2.3"
 # Bump when our packaging/icon changes, so existing installs see an update.
-STORE_REVISION = 1
+STORE_REVISION = 2
 # Only package validated runtime files. Other release files are ignored or rejected.
 RUNTIME_FILES = (
     "wiiu/apps/soh.wuhb",

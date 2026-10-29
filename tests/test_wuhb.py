@@ -9,7 +9,7 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
-from patch_wuhb import read_index, patch_wuhb_bytes, WuhbError
+from patch_wuhb import read_index, patch_wuhb_bytes, icon_as_tga_gz, WuhbError
 from wuhb_fixture import make_fake_wuhb
 
 
@@ -32,6 +32,21 @@ class WuhbIconTests(unittest.TestCase):
                     self.assertEqual(icon.mode, 'RGBA')
             else:
                 self.assertEqual(bdata, adata, name)
+
+    def test_icon_matches_wiiu_tga_layout(self):
+        from struct import unpack_from
+        compressed = icon_as_tga_gz(ROOT/'assets/icon.png')
+        tga = gzip.decompress(compressed)
+        self.assertEqual(tga[:4], b'\x00\x00\x02\x00')
+        self.assertEqual(unpack_from('<HH', tga, 12), (128,128))
+        self.assertEqual(tga[16], 32)
+        # Conventional bottom-left origin, 8 bits of alpha, not top-left.
+        self.assertEqual(tga[17], 8)
+        self.assertEqual(len(tga), 18+128*128*4+26)
+        self.assertTrue(tga.endswith(b'\x00'*8+b'TRUEVISION-XFILE.\x00'))
+        with Image.open(io.BytesIO(tga)) as img:
+            self.assertEqual(img.size, (128,128))
+            self.assertEqual(img.mode, 'RGBA')
 
     def test_rejects_non_wuhb_input(self):
         with self.assertRaisesRegex(WuhbError,'WUHB'):

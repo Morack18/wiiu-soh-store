@@ -57,7 +57,7 @@ class BuildTests(unittest.TestCase):
             dest = Path(tmp) / 'public'
             repo = builder.build(releases(blob), blob, dest, '9.2.3', ROOT / 'assets/icon.png')
             e = repo['packages'][0]
-            self.assertEqual(e['version'], '9.2.3-r3-store1')
+            self.assertEqual(e['version'], '9.2.3-r3-store2')
             self.assertEqual(e['title'], 'Ship of Harkinian')
             self.assertEqual(e['name'], builder.PKG)
             self.assertTrue((dest / 'packages' / builder.PKG / 'icon.png').exists())

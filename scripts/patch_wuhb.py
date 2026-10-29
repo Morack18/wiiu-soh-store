@@ -34,13 +34,30 @@ def align(value: int, boundary: int) -> int:
 
 
 def icon_as_tga_gz(icon_path: Path) -> bytes:
-    """Make the format consumed by the Wii U Menu: 128x128 BGRA TGA, gzip."""
-    with Image.open(icon_path) as im:
-        im = im.convert("RGBA").resize((128, 128), Image.Resampling.LANCZOS)
-        bgra = im.tobytes("raw", "BGRA")
-    # 32bit uncompressed TGA, origin top-left, 8 alpha bits per pixel.
-    tga_header = struct.pack("<BBBHHBHHHHBB", 0, 0, 2, 0, 0, 0, 0, 0, 128, 128, 32, 0x28)
-    return gzip.compress(tga_header + bgra, compresslevel=9, mtime=0)
+    """Generate 128x128, 32-bit TGA 2.0 in the conventional Wii U layout.
+
+    wuhbtool uses FreeImage's TGA encoder.  We previously wrote pixels with a
+    top-left origin and omitted the mandatory-for-console-compatibility TGA
+    footer.  Both can cause the Wii U Menu to display a question-mark tile.
+    Pillow's TGA encoder writes bottom-left-origin BGRA pixels and the
+    standard TRUEVISION-XFILE footer, matching the TGA layout expected here.
+    """
+    with Image.open(icon_path) as source:
+        icon = source.convert("RGBA").resize((128, 128), Image.Resampling.LANCZOS)
+        out = io.BytesIO()
+        icon.save(out, format="TGA", rle=False)
+    tga = out.getvalue()
+    signature = b"\x00" * 8 + b"TRUEVISION-XFILE.\x00"
+    if (
+        tga[:4] != b"\x00\x00\x02\x00"
+        or len(tga) != 18 + 128 * 128 * 4 + 26
+        or struct.unpack_from("<HH", tga, 12) != (128, 128)
+        or tga[16] != 32
+        or tga[17] != 8
+        or not tga.endswith(signature)
+    ):
+        raise WuhbError("TGA encoder did not produce the expected 32-bit Wii U icon")
+    return gzip.compress(tga, compresslevel=9, mtime=0)
 
 
 def _range(start: int, size: int, limit: int, what: str) -> None:
