@@ -33,6 +33,14 @@ FILES = (
     "wiiu/apps/opfor.wuhb",          # Opposing Force
 )
 PRIMARY = FILES[0]
+# Official v1.0.1 release includes a WUHB inside wiiu/apps/halflife/.
+# The builder's first version mistakenly assumed all three were at the root.
+# Install to the standard Aroma menu paths regardless of which of these
+# publisher-supplied archive layouts is used. WUHB bytes are never modified.
+SOURCE_TO_DEST = {source: dest for dest in FILES for source in (
+    dest,
+    f"wiiu/apps/halflife/{PurePosixPath(dest).name}",
+)}
 MAX_DOWNLOAD = 110 * 1024 * 1024
 MAX_UNCOMPRESSED = 230 * 1024 * 1024
 MAX_WUHB = 85 * 1024 * 1024
@@ -104,7 +112,11 @@ def safe_path(name: str) -> str:
 
 
 def extract_bundles(archive: bytes) -> dict[str, bytes]:
-    """Require exactly the three upstream WUHBs; never collect game data."""
+    """Validate official root/nested WUHB layouts; map to Aroma menu paths.
+
+    The upstream ZIP's internal directory is a source location, not the
+    installation destination. Never accept or copy proprietary game data.
+    """
     bundles = {}
     total = 0
     seen = set()
@@ -121,13 +133,16 @@ def extract_bundles(archive: bytes) -> dict[str, bytes]:
             total += member.file_size
             if total > MAX_UNCOMPRESSED:
                 raise ValueError("Upstream ZIP uncompressed data too large")
-            if path in FILES:
+            if path in SOURCE_TO_DEST:
+                dest_path = SOURCE_TO_DEST[path]
+                if dest_path in bundles:
+                    raise ValueError(f"Duplicate Half-Life launcher at multiple archive paths: {dest_path}")
                 if not (80 < member.file_size <= MAX_WUHB):
                     raise ValueError(f"Unexpected executable size: {path}")
                 payload = source.read(member)
                 if not payload.startswith(b"WUHB"):
                     raise ValueError(f"Not an Aroma WUHB: {path}")
-                bundles[path] = payload
+                bundles[dest_path] = payload
             elif path in ALLOWED_DOCUMENTS:
                 # Upstream documentation never becomes an installed file.
                 if member.file_size > 2 * 1024 * 1024:

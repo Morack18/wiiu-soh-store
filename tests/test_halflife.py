@@ -17,18 +17,20 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "tests"))
 
-from build_halflife import (PACKAGE, PRIMARY, FILES, build_package,
+from build_halflife import (PACKAGE, PRIMARY, FILES, SOURCE_TO_DEST, build_package,
                             extract_bundles, official_icon_png,
                             safe_path, select_release)
 from wuhb_fixture import make_fake_wuhb
 
 
-def sample_zip(exclude=(), extra=None, doc=False, duplicate=False):
+def sample_zip(exclude=(), extra=None, doc=False, duplicate=False, nested=False, mixed=False):
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        for path in FILES:
+        for i, path in enumerate(FILES):
             if path not in exclude:
-                z.writestr(path, make_fake_wuhb())
+                archive_path = (f"wiiu/apps/halflife/{Path(path).name}"
+                                if nested or (mixed and i == 1) else path)
+                z.writestr(archive_path, make_fake_wuhb())
         if doc:
             z.writestr("README.md", b"Upstream instructions")
         if extra:
@@ -96,6 +98,33 @@ class HalfLifeTests(unittest.TestCase):
         with Image.open(io.BytesIO(out)) as im:
             self.assertEqual(im.size, (128, 128))
             self.assertEqual(im.convert("RGBA").getpixel((0, 0)), (255, 0, 0, 255))
+
+    def test_real_v101_nested_path_is_accepted_and_relocated(self):
+        """Regression: v1.0.1 contained wiiu/apps/halflife/bshift.wuhb."""
+        self.assertEqual(SOURCE_TO_DEST["wiiu/apps/halflife/bshift.wuhb"],
+                         "wiiu/apps/bshift.wuhb")
+        for archive in (sample_zip(nested=True), sample_zip(mixed=True)):
+            self.assertEqual(extract_bundles(archive),
+                             {path: make_fake_wuhb() for path in FILES})
+            release = sample_release("1.0.1", archive)
+            with tempfile.TemporaryDirectory() as temp:
+                out = Path(temp)
+                make_feed(out)
+                build_package(release, release["assets"][0], "1.0.1", archive, out)
+                with zipfile.ZipFile(out / "zips" / "halflife_wiiu.zip") as z:
+                    self.assertEqual(set(z.namelist()),
+                                     {"info.json", "manifest.install", *FILES})
+                    for path in FILES:
+                        self.assertEqual(z.read(path), make_fake_wuhb())
+
+    def test_rejects_same_launcher_in_both_release_locations(self):
+        original = io.BytesIO()
+        with zipfile.ZipFile(original, "w", zipfile.ZIP_DEFLATED) as z:
+            for path in FILES:
+                z.writestr(path, make_fake_wuhb())
+            z.writestr("wiiu/apps/halflife/bshift.wuhb", make_fake_wuhb())
+        with self.assertRaisesRegex(ValueError, "Duplicate Half-Life launcher"):
+            extract_bundles(original.getvalue())
 
     def test_four_entries_and_safe_manifest(self):
         archive = sample_zip()
