@@ -5,7 +5,7 @@ on:
     branches: [main]
   workflow_dispatch:
   schedule:
-    # Daily release check for BOTH Ship of Harkinian and NUSspli.
+    # Daily check for Ship of Harkinian, NUSspli and Warthog Wii U tagged releases.
     - cron: '12 6 * * *'
 
 permissions:
@@ -41,14 +41,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 scripts/build_nusspli.py --out public
-      - name: Check both packages are in the published repository
+      - name: Append Chupathingy Warthog from latest tagged upstream Wii U release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/build_warthog.py --out public
+      - name: Check all three packages are in the published repository
         run: |
           python3 - <<'PY'
           import json
           from pathlib import Path
           repo = json.loads(Path('public/repo.json').read_text())
           names = [p['name'] for p in repo['packages']]
-          assert {'soh_wiiu_community', 'nusspli'}.issubset(set(names)), names
+          assert set(names) == {'soh_wiiu_community', 'nusspli', 'chupathingy_wiiu'}, names
           for name in names:
               assert (Path('public/zips') / f'{name}.zip').is_file(), name
               assert (Path('public/packages') / name / 'icon.png').is_file(), name
