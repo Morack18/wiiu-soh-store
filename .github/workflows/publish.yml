@@ -1,11 +1,11 @@
-name: Publish Wii U SoH App Store repository
+name: Publish Wii U custom Homebrew App Store
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
   schedule:
-    # Daily. Also supports manual execution from the Actions tab.
+    # Daily release check for BOTH Ship of Harkinian and NUSspli.
     - cron: '12 6 * * *'
 
 permissions:
@@ -33,10 +33,27 @@ jobs:
         run: python3 -m unittest discover -s tests -v
       - name: Prepare GitHub Pages
         uses: actions/configure-pages@v5
-      - name: Build custom homebrew package repository
+      - name: Build original Ship of Harkinian package
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 scripts/build_repo.py --out public --compat 9.2.3
+      - name: Append NUSspli from latest stable upstream Aroma release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/build_nusspli.py --out public
+      - name: Check both packages are in the published repository
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          repo = json.loads(Path('public/repo.json').read_text())
+          names = [p['name'] for p in repo['packages']]
+          assert {'soh_wiiu_community', 'nusspli'}.issubset(set(names)), names
+          for name in names:
+              assert (Path('public/zips') / f'{name}.zip').is_file(), name
+              assert (Path('public/packages') / name / 'icon.png').is_file(), name
+          print('Verified store packages:', names)
+          PY
       - name: Upload static repository
         uses: actions/upload-pages-artifact@v3
         with:
