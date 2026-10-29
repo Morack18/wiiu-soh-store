@@ -101,14 +101,16 @@ def extract_expected(source_zip: bytes) -> dict[str, bytes]:
                 raise ValueError("An upstream archive unexpectedly contains copyrighted/user game data")
             if name in RUNTIME_FILES:
                 selected[name] = z.read(member)
-            elif name == "wiiu/apps/soh923/README.md":
-                # Ignore upstream setup documentation.
-                # Never include it in the installed package.
-                continue
             elif name.startswith("wiiu/apps/"):
-                # New runtime/config layout must be manually audited. This also
-                # intentionally blocks extra code or config files from updates.
-                raise ValueError(f"Unreviewed Wii U app file: {name}; release needs review")
+                # Never silently ignore new Wii U executables or engine assets.
+                if PurePosixPath(name).suffix.lower() in {
+                    ".wuhb", ".rpx", ".rpl", ".elf", ".o2r", ".otr"
+                }:
+                    raise ValueError(
+                        f"Unreviewed Wii U runtime file: {name}; release needs review"
+                    )
+                # Do not install upstream documentation or helper scripts.
+                print(f"Skipping non-runtime upstream file: {name}")
         for required in RUNTIME_FILES:
             if required not in selected or not selected[required]:
                 raise ValueError(f"Required Wii U runtime file missing: {required}")

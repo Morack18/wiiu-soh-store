@@ -25,6 +25,8 @@ def fake_asset(add_user_data=False, extra_runtime=False):
         z.writestr('wiiu/apps/soh.wuhb', b'FAKE WUHB bytes')
         z.writestr('wiiu/apps/soh923/soh.o2r', b'FAKE ENGINE bytes')
         z.writestr('README.md', b'upstream readme')
+        z.writestr('wiiu/apps/soh923/README.md', b'docs')
+        z.writestr('wiiu/apps/soh923/fix_blank_skyboxes.py', b'helper')
         if add_user_data:
             z.writestr('wiiu/apps/soh923/oot.o2r', b'bad')
         if extra_runtime:
