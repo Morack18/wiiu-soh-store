@@ -19,12 +19,16 @@ import urllib.error
 import urllib.request
 import zipfile
 
+from patch_wuhb import patch_wuhb_bytes
+
 REPO = "utsnik/Shipwright"
 API_URL = f"https://api.github.com/repos/{REPO}/releases?per_page=100"
 PKG = "soh_wiiu_community"
 USER_AGENT = "wiiu-soh-custom-store/1.0"
 # Update this compatibility family after manually testing a new base release.
 DEFAULT_COMPAT = "9.2.3"
+# Bump when our packaging/icon changes, so existing installs see an update.
+STORE_REVISION = 1
 # Only package validated runtime files. Other release files are ignored or rejected.
 RUNTIME_FILES = (
     "wiiu/apps/soh.wuhb",
@@ -109,7 +113,7 @@ def extract_expected(source_zip: bytes) -> dict[str, bytes]:
                     raise ValueError(
                         f"Unreviewed Wii U runtime file: {name}; release needs review"
                     )
-                # Do not install upstream documentation or helper scripts.
+                # Ignore upstream documentation and PC-side helper scripts.
                 print(f"Skipping non-runtime upstream file: {name}")
         for required in RUNTIME_FILES:
             if required not in selected or not selected[required]:
@@ -126,16 +130,22 @@ def build(releases: list[dict], asset_bytes: bytes, output: Path, compat: str,
         if actual.lower() != digest[7:].lower():
             raise ValueError("Asset SHA256 does not match GitHub release metadata")
     selected = extract_expected(asset_bytes)
-    version = release["tag_name"].removeprefix("wiiu-")
-    title = "Ship of Harkinian (Wii U community port)"
+    if not icon_path.is_file():
+        raise ValueError(f"Required project icon missing: {icon_path}")
+    selected["wiiu/apps/soh.wuhb"] = patch_wuhb_bytes(
+        selected["wiiu/apps/soh.wuhb"], icon_path
+    )
+    upstream_version = release["tag_name"].removeprefix("wiiu-")
+    version = f"{upstream_version}-store{STORE_REVISION}"
+    title = "Ship of Harkinian"
     description = "Ocarina of Time PC port for Wii U Aroma; requires your own oot.o2r"
-    shortlog = f"Wii U compatibility release {version}; see upstream release notes."
+    shortlog = f"Wii U release {upstream_version}; custom Wii U Menu icon and store title."
     info = {
         "name": PKG, "title": title, "version": version, "author": "HarbourMasters / utsnik",
         "category": "games", "description": description,
         "details": ("Community Wii U port for Aroma. You MUST separately make oot.o2r "
                     f"with desktop SoH {compat} and a legally dumped ROM. "
-                    "Store updates replace only soh.wuhb and soh.o2r. Game data, "
+                    "Store updates replace only soh.wuhb and soh.o2r. Custom Wii U Menu icon is embedded in soh.wuhb. Game data, "
                     "saves, settings, and texture mods are not part of the package. "
                     "Do not uninstall this package to perform an update."),
         "changelog": shortlog,

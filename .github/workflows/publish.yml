@@ -23,6 +23,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Install image processing dependency
+        run: python3 -m pip install Pillow==11.3.0
+      - name: Run package tests
+        run: python3 -m unittest discover -s tests -v
       - name: Prepare GitHub Pages
         uses: actions/configure-pages@v5
       - name: Build custom homebrew package repository

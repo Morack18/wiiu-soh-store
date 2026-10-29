@@ -2,18 +2,22 @@ import hashlib
 import importlib.util
 import io
 import json
+import sys
 from pathlib import Path
 import tempfile
 import unittest
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
 
 def import_file(name, path):
     spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+from wuhb_fixture import make_fake_wuhb
 
 builder = import_file('builder', ROOT / 'scripts' / 'build_repo.py')
 setup = import_file('setup', ROOT / 'scripts' / 'add_repo_to_sd.py')
@@ -22,11 +26,11 @@ setup = import_file('setup', ROOT / 'scripts' / 'add_repo_to_sd.py')
 def fake_asset(add_user_data=False, extra_runtime=False):
     f = io.BytesIO()
     with zipfile.ZipFile(f, 'w', zipfile.ZIP_DEFLATED) as z:
-        z.writestr('wiiu/apps/soh.wuhb', b'FAKE WUHB bytes')
+        z.writestr('wiiu/apps/soh.wuhb', make_fake_wuhb())
         z.writestr('wiiu/apps/soh923/soh.o2r', b'FAKE ENGINE bytes')
         z.writestr('README.md', b'upstream readme')
-        z.writestr('wiiu/apps/soh923/README.md', b'docs')
-        z.writestr('wiiu/apps/soh923/fix_blank_skyboxes.py', b'helper')
+        z.writestr('wiiu/apps/soh923/README.md', b'upstream Wii U setup guide')
+        z.writestr('wiiu/apps/soh923/fix_blank_skyboxes.py', b'PC side helper')
         if add_user_data:
             z.writestr('wiiu/apps/soh923/oot.o2r', b'bad')
         if extra_runtime:
@@ -53,7 +57,8 @@ class BuildTests(unittest.TestCase):
             dest = Path(tmp) / 'public'
             repo = builder.build(releases(blob), blob, dest, '9.2.3', ROOT / 'assets/icon.png')
             e = repo['packages'][0]
-            self.assertEqual(e['version'], '9.2.3-r3')
+            self.assertEqual(e['version'], '9.2.3-r3-store1')
+            self.assertEqual(e['title'], 'Ship of Harkinian')
             self.assertEqual(e['name'], builder.PKG)
             self.assertTrue((dest / 'packages' / builder.PKG / 'icon.png').exists())
             self.assertEqual(json.loads((dest/'repo.json').read_text()), repo)
@@ -64,6 +69,15 @@ class BuildTests(unittest.TestCase):
                                  ''.join(f'U: {n}\n' for n in builder.RUNTIME_FILES))
                 self.assertEqual(json.loads(z.read('info.json'))['version'], e['version'])
                 self.assertNotIn('oot.o2r', '\n'.join(z.namelist()))
+                from patch_wuhb import read_index
+                _, index = read_index(z.read('wiiu/apps/soh.wuhb'))
+                self.assertIn('meta/iconTex.tga.gz', index)
+                self.assertIn('code/root.rpx', index)
+
+    def test_upstream_wiiu_readme_is_not_installed(self):
+        selected = builder.extract_expected(fake_asset())
+        self.assertEqual(set(selected), set(builder.RUNTIME_FILES))
+        self.assertNotIn('wiiu/apps/soh923/README.md', selected)
 
     def test_reject_corrupted_asset(self):
         blob = fake_asset()
